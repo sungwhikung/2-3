@@ -1,0 +1,52 @@
+name: Update school data
+
+on:
+  workflow_dispatch:
+  schedule:
+    # UTC 20:00 = 한국 시간 다음 날 오전 05:00
+    - cron: "0 20 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-school-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Fetch NEIS meals
+        env:
+          NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+        run: python scripts/fetch_meals.py
+
+      - name: Fetch NEIS school schedule
+        env:
+          NEIS_API_KEY: ${{ secrets.NEIS_API_KEY }}
+        run: python scripts/fetch_schedule.py
+
+      # 캘린더 쪽 문제로 급식 갱신까지 막히지 않게 한다
+      - name: Fetch study supervisors and school calendar
+        continue-on-error: true
+        env:
+          SCHEDULE_API_KEY: ${{ secrets.SCHEDULE_API_KEY }}
+        run: python scripts/fetch_supervisors.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if ! git diff --cached --quiet; then
+            git commit -m "Update school data"
+            git push
+          else
+            echo "No changes in school data."
+          fi

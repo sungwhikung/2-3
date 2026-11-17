@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="논산대건고등학교 2학년 3반 급식, 시간표, 일정, 공지">
+  <meta name="theme-color" content="#f5f4ef" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111315" media="(prefers-color-scheme: dark)">
+  <title>2학년 3반 · 논산대건고</title>
+  <script>
+    try { const t = localStorage.getItem("class23Theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="2-3">
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#home"><span class="brand-mark">2–3</span><span class="brand-sub">논산대건고 2학년 3반</span></a>
+      <nav class="tabs" aria-label="주요 메뉴">
+        <a class="tab" href="#home" data-page="home">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5.5v-5.5h-5V20H4z"/></svg><span>홈</span>
+        </a>
+        <a class="tab" href="#meals" data-page="meals">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7a2.5 2.5 0 0 0 5 0V3M9.5 3v18M17 3c-1.7 1.6-2.5 4-2.5 7v3H17v8"/></svg><span>급식</span>
+        </a>
+        <a class="tab" href="#timetable" data-page="timetable">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M4 14.5h16M9.5 5v14M15 5v14"/></svg><span>시간표</span>
+        </a>
+        <a class="tab" href="#calendar" data-page="calendar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10.5h16M8 3.5v4M16 3.5v4"/></svg><span>일정</span>
+        </a>
+        <a class="tab" href="#notices" data-page="notices">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l7 4.5v-13L7 10zM17.5 9a4 4 0 0 1 0 6"/></svg><span>공지</span>
+        </a>
+      </nav>
+      <button class="icon-button theme-button" id="themeToggle" type="button" aria-label="밝게/어둡게 바꾸기">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 홈 -->
+    <section id="page-home" class="page" data-page="home">
+      <div class="hero">
+        <p class="eyebrow" id="homeGreeting">2학년 3반</p>
+        <h1 id="homeDate">—</h1>
+        <p class="hero-line" id="homeSupervisor" hidden></p>
+        <div class="dday-bar">
+          <div id="ddayList" class="chips"></div>
+          <button class="text-button" id="ddayToggle" type="button">+ D-day</button>
+        </div>
+        <form id="ddayForm" class="inline-form" hidden>
+          <input id="ddayTitle" maxlength="20" placeholder="이름 (예: 기말고사)" aria-label="D-day 이름" required>
+          <input id="ddayDate" type="date" aria-label="날짜" required>
+          <button class="button primary" type="submit">추가</button>
+        </form>
+      </div>
+
+      <div class="home-grid">
+        <article class="card" id="homeMeal"><p class="placeholder">급식을 불러오는 중…</p></article>
+        <article class="card" id="homeTimetable"><p class="placeholder">시간표를 불러오는 중…</p></article>
+        <article class="card" id="homeUpcoming"><p class="placeholder">일정을 불러오는 중…</p></article>
+        <article class="card" id="homeNotices"><p class="placeholder">공지를 불러오는 중…</p></article>
+
+        <article class="card picker">
+          <div class="card-head"><h2>번호 뽑기</h2><span class="tag">발표 · 당번 · 순서 정할 때</span></div>
+          <form id="pickerForm" class="picker-form">
+            <label>인원<input id="pickerSize" type="number" inputmode="numeric" min="1" max="60" value="18"></label>
+            <label>뽑을 수<input id="pickerCount" type="number" inputmode="numeric" min="1" max="60" value="1"></label>
+            <label class="grow">제외할 번호<input id="pickerExclude" inputmode="numeric" placeholder="예: 3, 11"></label>
+            <button class="button primary" type="submit">뽑기</button>
+            <button class="button" type="button" id="pickerShuffle">전체 순서 섞기</button>
+          </form>
+          <div id="pickerResult" class="picker-result" aria-live="polite"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 급식 -->
+    <section id="page-meals" class="page" data-page="meals" hidden>
+      <div class="page-head">
+        <h1 id="mealDateTitle">급식</h1>
+        <div class="head-actions">
+          <button class="text-button" id="mealToday" type="button">오늘</button>
+          <input id="mealDatePicker" class="date-jump" type="date" aria-label="날짜로 이동">
+        </div>
+      </div>
+      <div class="week-strip">
+        <button class="icon-button" id="mealPrevWeek" type="button" aria-label="이전 주">‹</button>
+        <div id="weekStrip" class="week-days"></div>
+        <button class="icon-button" id="mealNextWeek" type="button" aria-label="다음 주">›</button>
+      </div>
+      <div id="mealCards" class="meal-grid"><p class="placeholder">불러오는 중…</p></div>
+
+      <details class="panel fold" id="allergyPanel">
+        <summary>내 알레르기 표시<span id="allergySummary" class="tag"></span></summary>
+        <p class="muted">고른 재료가 들어간 메뉴를 눈에 띄게 표시합니다. 이 기기에만 저장됩니다.</p>
+        <div id="allergyChips" class="chips"></div>
+      </details>
+
+      <div class="section-head"><h2>한 주 한눈에</h2><span id="weekLabel" class="muted"></span></div>
+      <div class="table-wrap"><table class="week-table"><thead id="weekHead"></thead><tbody id="weekBody"></tbody></table></div>
+      <p class="source-note">나이스 교육정보 개방 포털 자료입니다. 실제 메뉴는 학교 사정에 따라 바뀔 수 있습니다.</p>
+    </section>
+
+    <!-- 시간표 -->
+    <section id="page-timetable" class="page" data-page="timetable" hidden>
+      <div class="page-head"><h1 id="timetableTitle">시간표</h1></div>
+      <div class="table-wrap"><table class="time-table"><thead id="timetableHead"></thead><tbody id="timetableBody"></tbody></table></div>
+
+      <div class="panel">
+        <div class="card-head"><h2>내 선택 과목</h2><span class="tag">이 기기에만 저장</span></div>
+        <p class="muted">번호를 넣으면 내 선택 과목이 한 번에 채워집니다. 아래에서 직접 고쳐도 됩니다.</p>
+        <form class="inline-form student-form">
+          <input class="student-number" inputmode="numeric" maxlength="4" placeholder="번호 또는 학번 (예: 8, 2308)" aria-label="번호 또는 학번">
+          <button class="button primary" type="submit">불러오기</button>
+        </form>
+        <p class="status-text student-status" aria-live="polite"></p>
+        <div id="electiveForm" class="elective-grid"></div>
+      </div>
+    </section>
+
+    <!-- 일정 -->
+    <section id="page-calendar" class="page" data-page="calendar" hidden>
+      <div class="page-head">
+        <div class="month-nav">
+          <button class="icon-button" id="calendarPrev" type="button" aria-label="이전 달">‹</button>
+          <h1 id="calendarMonth">—</h1>
+          <button class="icon-button" id="calendarNext" type="button" aria-label="다음 달">›</button>
+        </div>
+        <button class="text-button" id="calendarToday" type="button">오늘</button>
+      </div>
+      <div class="calendar-layout">
+        <div class="panel calendar-panel">
+          <div class="calendar-grid weekdays"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+          <div class="legend"><span><i class="dot school"></i>학교 일정</span><span><i class="dot holiday"></i>쉬는 날</span><span><i class="dot notice"></i>공지</span><span><i class="dot memo"></i>내 메모</span></div>
+        </div>
+        <div class="panel day-panel">
+          <h2 id="dayTitle">—</h2>
+          <div id="dayDetails" class="day-list"></div>
+          <label class="field-label" for="memoText">내 메모 <span class="tag">이 기기에만 저장</span></label>
+          <textarea id="memoText" rows="3" placeholder="준비물, 할 일, 수행평가…"></textarea>
+          <p id="memoStatus" class="status-text" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 공지 -->
+    <section id="page-notices" class="page" data-page="notices" hidden>
+      <div class="page-head">
+        <h1>공지</h1>
+        <button class="text-button" id="reloadNotices" type="button">새로고침</button>
+      </div>
+      <div id="noticeList" class="notice-list"><p class="placeholder">불러오는 중…</p></div>
+
+      <details class="panel fold admin-panel">
+        <summary>관리자</summary>
+        <form id="loginForm" class="stack">
+          <label class="field-label" for="adminEmail">이메일</label>
+          <input id="adminEmail" type="email" autocomplete="username" required>
+          <label class="field-label" for="adminPassword">비밀번호</label>
+          <input id="adminPassword" type="password" autocomplete="current-password" required>
+          <button class="button primary" type="submit">로그인</button>
+        </form>
+        <div id="loggedIn" class="logged-in" hidden>
+          <div><strong id="loggedInEmail">—</strong><p id="adminRole" class="muted"></p></div>
+          <button class="button" id="adminLogout" type="button">로그아웃</button>
+        </div>
+        <p id="authStatus" class="status-text" aria-live="polite"></p>
+        <form id="noticeForm" class="stack" hidden>
+          <div class="card-head"><h2 id="noticeFormTitle">공지 작성</h2><button class="text-button" id="noticeCancel" type="button">취소</button></div>
+          <input id="noticeId" type="hidden">
+          <label class="field-label" for="noticeDate">날짜</label>
+          <input id="noticeDate" type="date" required>
+          <label class="field-label" for="noticeTitle">제목</label>
+          <input id="noticeTitle" maxlength="100" required>
+          <label class="field-label" for="noticeContent">내용</label>
+          <textarea id="noticeContent" rows="5" maxlength="3000" required></textarea>
+          <button class="button primary" type="submit">저장</button>
+          <p id="noticeFormStatus" class="status-text" aria-live="polite"></p>
+        </form>
+      </details>
+    </section>
+
+    <footer class="footer">
+      <p>데이터 갱신 <span id="updatedAt">확인 중</span> · 매일 새벽 자동 갱신</p>
+      <p>우리 반 친구들을 위한 개인 프로젝트이며 학교 공식 서비스가 아닙니다.</p>
+      <button class="text-button" id="installButton" type="button" hidden>홈 화면에 앱으로 설치</button>
+    </footer>
+  </main>
+</body>
+</html>
