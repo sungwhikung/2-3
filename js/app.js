@@ -2,6 +2,7 @@
    한 기능이 실패해도 나머지는 계속 동작하도록 데이터별로 따로 불러온다. */
 import { $, esc, load, save, toast } from "./util.js";
 import { setupTools, suggestClassSize } from "./tools.js";
+import { setupSeats } from "./seats.js";
 
 const KST = "Asia/Seoul";
 const MEAL_NAMES = { 1: "아침", 2: "점심", 3: "저녁" };
@@ -838,6 +839,7 @@ function start() {
   setupNotices();
   setupTodos();
   setupTools();
+  setupSeats();
   setupInstall();
 
   renderHero();

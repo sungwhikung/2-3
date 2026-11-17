@@ -1,4 +1,4 @@
-/* 도구 탭: 번호 뽑기 · 조 나누기 · 자리 바꾸기 */
+/* 도구 탭: 번호 뽑기 · 조 나누기 (자리 바꾸기는 seats.js) */
 import { $, esc, load, save } from "./util.js";
 
 const KEY = "class23Tools";
@@ -11,7 +11,7 @@ function randomBelow(max) {
   do crypto.getRandomValues(box); while (box[0] >= limit);
   return box[0] % max;
 }
-function shuffled(list) {
+export function shuffled(list) {
   const result = [...list];
   for (let i = result.length - 1; i > 0; i--) {
     const j = randomBelow(i + 1);
@@ -21,12 +21,12 @@ function shuffled(list) {
 }
 
 // 설정에서 뺀 번호를 제외한 우리 반 번호들
-function classNumbers() {
+export function classNumbers() {
   const size = clamp($("toolSize").value, 1, 60);
   const excluded = new Set(($("toolExclude").value.match(/\d+/g) || []).map(Number));
   return Array.from({ length: size }, (_, i) => i + 1).filter(number => !excluded.has(number));
 }
-const nameOf = number => ($("toolNames").value.split("\n")[number - 1] || "").trim();
+export const nameOf = number => ($("toolNames").value.split("\n")[number - 1] || "").trim();
 function ball(number, index, small) {
   const name = nameOf(number);
   return `<span class="ball ${small ? "small" : ""} ${name ? "named" : ""}" style="animation-delay:${Math.min(index * 40, 800)}ms">${number}${name ? `<small>${esc(name)}</small>` : ""}</span>`;
@@ -35,7 +35,7 @@ const empty = '<p class="muted">뽑을 번호가 없어요. 인원과 빼는 번
 
 export function setupTools() {
   const settings = load(KEY, {});
-  const fields = { size: "toolSize", exclude: "toolExclude", names: "toolNames", count: "drawCount", teams: "teamCount", columns: "seatColumns" };
+  const fields = { size: "toolSize", exclude: "toolExclude", names: "toolNames", count: "drawCount", teams: "teamCount" };
   for (const [name, id] of Object.entries(fields)) if (settings[name]) $(id).value = settings[name];
   $("drawNoRepeat").checked = Boolean(settings.noRepeat);
   let drawn = Array.isArray(settings.drawn) ? settings.drawn : [];
@@ -92,20 +92,11 @@ export function setupTools() {
     $("teamResult").innerHTML = teams.map((team, index) => `<div class="team"><h3>${index + 1}조 <small>${team.length}명</small></h3><div class="tool-result">${team.sort((a, b) => a - b).map((number, i) => ball(number, index * 2 + i, true)).join("")}</div></div>`).join("");
   });
 
-  // 자리 바꾸기
-  $("seatForm").addEventListener("submit", event => {
-    event.preventDefault();
-    const numbers = shuffled(classNumbers());
-    if (!numbers.length) { $("seatResult").innerHTML = empty; return; }
-    const columns = clamp($("seatColumns").value, 1, 10);
-    $("seatResult").innerHTML = `<div class="desk">교탁</div><div class="seats" style="grid-template-columns:repeat(${columns}, minmax(0, 1fr))">${numbers.map((number, index) => {
-      const name = nameOf(number);
-      return `<span class="seat" style="animation-delay:${Math.min(index * 30, 800)}ms"><b>${number}</b>${name ? `<small>${esc(name)}</small>` : ""}</span>`;
-    }).join("")}</div>`;
-  });
 }
 
 // 저장해 둔 인원이 없으면 명단 인원으로 맞춘다
 export function suggestClassSize(size) {
-  if (size && !load(KEY, {}).size) $("toolSize").value = size;
+  if (!size || load(KEY, {}).size || Number($("toolSize").value) === size) return;
+  $("toolSize").value = size;
+  $("toolSize").dispatchEvent(new Event("input", { bubbles: true })); // 자리 바꾸기의 인원 안내도 따라가게
 }

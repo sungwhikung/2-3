@@ -248,13 +248,46 @@
           <div id="teamResult" class="team-result" aria-live="polite"></div>
         </article>
 
-        <article class="card wide">
-          <div class="card-head"><h2>자리 바꾸기</h2><span class="tag">무작위 배치</span></div>
-          <form id="seatForm" class="tool-form">
-            <label>한 줄에 몇 명<input id="seatColumns" type="number" inputmode="numeric" min="1" max="10" value="6"></label>
-            <button class="button primary" type="submit">배치하기</button>
-          </form>
-          <div id="seatResult" class="seat-result" aria-live="polite"></div>
+        <article class="card wide" id="seatCard">
+          <div class="card-head"><h2>자리 바꾸기</h2><span id="seatCount" class="tag"></span></div>
+
+          <details class="fold seat-setup" id="seatSetup">
+            <summary>교실 모양 · 조건 설정</summary>
+            <div class="tool-form">
+              <label>한 줄 자리 수<input id="seatCols" type="number" inputmode="numeric" min="1" max="10"></label>
+              <label>줄 수<input id="seatRows" type="number" inputmode="numeric" min="1" max="10"></label>
+              <label>붙여 앉기<select id="seatGroup"><option value="1">한 명씩</option><option value="2">둘씩 짝</option><option value="3">셋씩</option><option value="4">넷씩</option></select></label>
+              <button class="button" type="button" id="seatFit">인원에 맞추기</button>
+            </div>
+
+            <div class="segmented" role="radiogroup" aria-label="자리 그림을 눌렀을 때 할 일">
+              <label><input type="radio" name="seatMode" value="shape" checked>자리 넣기 · 빼기</label>
+              <label><input type="radio" name="seatMode" value="fixed">번호 고정</label>
+            </div>
+            <p class="muted" id="seatModeHint"></p>
+            <div class="desk">교탁</div>
+            <div id="seatEditor" class="seats"></div>
+            <p id="seatStatus" class="status-text" aria-live="polite"></p>
+
+            <div class="tool-form">
+              <label class="grow">앞줄에 앉을 번호<input id="seatFront" inputmode="numeric" placeholder="예: 3, 7 (칠판이 잘 안 보이는 친구)"></label>
+              <label class="grow">서로 떨어져 앉을 번호<input id="seatApart" placeholder="예: 3-7, 5-12"></label>
+            </div>
+            <label class="check"><input type="checkbox" id="seatAvoidSame">지난번에 확정한 자리와 같은 자리에 앉지 않기</label>
+            <label class="check"><input type="checkbox" id="seatAvoidMate">지난번 짝과 다시 짝이 되지 않기</label>
+            <label class="check"><input type="checkbox" id="seatTapReveal">한 자리씩 눌러서 공개하기</label>
+          </details>
+
+          <div class="tool-form seat-actions">
+            <button class="button primary" type="button" id="seatShuffle">자리 뽑기</button>
+            <button class="button" type="button" id="seatRevealAll" hidden>모두 공개</button>
+            <button class="button" type="button" id="seatConfirm" hidden>이 자리로 확정</button>
+            <button class="button" type="button" id="seatFlip" hidden>교탁에서 보기</button>
+            <button class="button" type="button" id="seatCopy" hidden>복사</button>
+            <button class="button" type="button" id="seatFull" hidden>크게 보기</button>
+          </div>
+          <p id="seatNote" class="status-text" aria-live="polite"></p>
+          <div id="seatResult" class="seat-result"></div>
         </article>
       </div>
     </section>
