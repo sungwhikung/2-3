@@ -40,6 +40,9 @@
         <a class="tab" href="#notices" data-page="notices">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l7 4.5v-13L7 10zM17.5 9a4 4 0 0 1 0 6"/></svg><span>공지</span>
         </a>
+        <a class="tab" href="#tools" data-page="tools">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="3"/><path d="M9 9h.01M15 9h.01M12 12h.01M9 15h.01M15 15h.01" stroke-width="2.4"/></svg><span>도구</span>
+        </a>
       </nav>
       <button class="icon-button theme-button" id="themeToggle" type="button" aria-label="밝게/어둡게 바꾸기">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
@@ -54,6 +57,7 @@
         <p class="eyebrow" id="homeGreeting">2학년 3반</p>
         <h1 id="homeDate">—</h1>
         <p class="hero-line" id="homeSupervisor" hidden></p>
+        <p class="hero-line" id="homeVacation" hidden></p>
         <div class="dday-bar">
           <div id="ddayList" class="chips"></div>
           <button class="text-button" id="ddayToggle" type="button">+ D-day</button>
@@ -68,20 +72,18 @@
       <div class="home-grid">
         <article class="card" id="homeMeal"><p class="placeholder">급식을 불러오는 중…</p></article>
         <article class="card" id="homeTimetable"><p class="placeholder">시간표를 불러오는 중…</p></article>
+        <article class="card" id="homeTodo">
+          <div class="card-head"><h2>할 일</h2><span class="tag">이 기기에만 저장</span></div>
+          <ul id="todoList" class="todo-list"></ul>
+          <form id="todoForm" class="inline-form">
+            <input id="todoTitle" maxlength="60" placeholder="수행평가, 숙제, 준비물…" aria-label="할 일" required>
+            <input id="todoDate" type="date" aria-label="마감일 (안 넣어도 됨)">
+            <button class="button primary" type="submit">추가</button>
+          </form>
+          <button class="text-button" id="todoClear" type="button" hidden></button>
+        </article>
         <article class="card" id="homeUpcoming"><p class="placeholder">일정을 불러오는 중…</p></article>
         <article class="card" id="homeNotices"><p class="placeholder">공지를 불러오는 중…</p></article>
-
-        <article class="card picker">
-          <div class="card-head"><h2>번호 뽑기</h2><span class="tag">발표 · 당번 · 순서 정할 때</span></div>
-          <form id="pickerForm" class="picker-form">
-            <label>인원<input id="pickerSize" type="number" inputmode="numeric" min="1" max="60" value="18"></label>
-            <label>뽑을 수<input id="pickerCount" type="number" inputmode="numeric" min="1" max="60" value="1"></label>
-            <label class="grow">제외할 번호<input id="pickerExclude" inputmode="numeric" placeholder="예: 3, 11"></label>
-            <button class="button primary" type="submit">뽑기</button>
-            <button class="button" type="button" id="pickerShuffle">전체 순서 섞기</button>
-          </form>
-          <div id="pickerResult" class="picker-result" aria-live="polite"></div>
-        </article>
       </div>
     </section>
 
@@ -90,6 +92,7 @@
       <div class="page-head">
         <h1 id="mealDateTitle">급식</h1>
         <div class="head-actions">
+          <button class="text-button" id="mealShare" type="button">공유</button>
           <button class="text-button" id="mealToday" type="button">오늘</button>
           <input id="mealDatePicker" class="date-jump" type="date" aria-label="날짜로 이동">
         </div>
@@ -100,6 +103,17 @@
         <button class="icon-button" id="mealNextWeek" type="button" aria-label="다음 주">›</button>
       </div>
       <div id="mealCards" class="meal-grid"><p class="placeholder">불러오는 중…</p></div>
+
+      <details class="panel fold" id="findPanel">
+        <summary>메뉴 찾기 · 기다리는 메뉴<span id="favSummary" class="tag"></span></summary>
+        <p class="muted">메뉴 이름으로 언제 나오는지 찾아보세요. 저장해 두면 홈에서 미리 알려 주고 ★로 표시합니다.</p>
+        <form id="findForm" class="inline-form">
+          <input id="findInput" type="search" maxlength="20" placeholder="예: 치킨, 돈까스, 마라" aria-label="메뉴 이름">
+          <button class="button" type="submit">★ 저장</button>
+        </form>
+        <div id="favChips" class="chips fav-chips"></div>
+        <ul id="findResults" class="upcoming"></ul>
+      </details>
 
       <details class="panel fold" id="allergyPanel">
         <summary>내 알레르기 표시<span id="allergySummary" class="tag"></span></summary>
@@ -143,11 +157,15 @@
         <div class="panel calendar-panel">
           <div class="calendar-grid weekdays"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
           <div id="calendarGrid" class="calendar-grid"></div>
-          <div class="legend"><span><i class="dot school"></i>학교 일정</span><span><i class="dot holiday"></i>쉬는 날</span><span><i class="dot notice"></i>공지</span><span><i class="dot memo"></i>내 메모</span></div>
+          <div class="legend"><span><i class="dot school"></i>학교 일정</span><span><i class="dot holiday"></i>쉬는 날</span><span><i class="dot notice"></i>공지</span><span><i class="dot memo"></i>내 메모 · 할 일</span></div>
         </div>
         <div class="panel day-panel">
           <h2 id="dayTitle">—</h2>
           <div id="dayDetails" class="day-list"></div>
+          <form id="dayTodoForm" class="inline-form">
+            <input id="dayTodoTitle" maxlength="60" placeholder="이 날까지 할 일 추가" aria-label="이 날까지 할 일" required>
+            <button class="button" type="submit">추가</button>
+          </form>
           <label class="field-label" for="memoText">내 메모 <span class="tag">이 기기에만 저장</span></label>
           <textarea id="memoText" rows="3" placeholder="준비물, 할 일, 수행평가…"></textarea>
           <p id="memoStatus" class="status-text" aria-live="polite"></p>
@@ -192,11 +210,61 @@
       </details>
     </section>
 
+    <!-- 도구 -->
+    <section id="page-tools" class="page" data-page="tools" hidden>
+      <div class="page-head"><h1>도구</h1></div>
+      <div class="panel tools-common">
+        <div class="card-head"><h2>우리 반</h2><span class="tag">이 기기에만 저장</span></div>
+        <div class="tool-form">
+          <label>인원<input id="toolSize" type="number" inputmode="numeric" min="1" max="60" value="18"></label>
+          <label class="grow">빼고 뽑을 번호<input id="toolExclude" inputmode="numeric" placeholder="예: 3, 11 (결석한 친구 등)"></label>
+        </div>
+        <details class="fold names-fold">
+          <summary>이름으로 보기</summary>
+          <p class="muted">번호 순서대로 한 줄에 한 명씩 적으면 결과에 이름이 같이 나옵니다. 이 기기에만 저장되고 어디에도 올라가지 않습니다.</p>
+          <textarea id="toolNames" rows="6" placeholder="1번 이름&#10;2번 이름&#10;3번 이름"></textarea>
+        </details>
+      </div>
+
+      <div class="tools-grid">
+        <article class="card">
+          <div class="card-head"><h2>번호 뽑기</h2><span class="tag">발표 · 당번</span></div>
+          <form id="drawForm" class="tool-form">
+            <label>뽑을 수<input id="drawCount" type="number" inputmode="numeric" min="1" max="60" value="1"></label>
+            <button class="button primary" type="submit">뽑기</button>
+            <button class="button" type="button" id="drawShuffle">전체 순서 섞기</button>
+            <label class="check"><input id="drawNoRepeat" type="checkbox">한 번 뽑힌 번호는 다시 안 뽑기</label>
+          </form>
+          <div id="drawResult" class="tool-result" aria-live="polite"></div>
+          <p id="drawnInfo" class="status-text" hidden></p>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><h2>조 나누기</h2><span class="tag">모둠 · 팀</span></div>
+          <form id="teamForm" class="tool-form">
+            <label>조 개수<input id="teamCount" type="number" inputmode="numeric" min="2" max="20" value="4"></label>
+            <button class="button primary" type="submit">나누기</button>
+          </form>
+          <div id="teamResult" class="team-result" aria-live="polite"></div>
+        </article>
+
+        <article class="card wide">
+          <div class="card-head"><h2>자리 바꾸기</h2><span class="tag">무작위 배치</span></div>
+          <form id="seatForm" class="tool-form">
+            <label>한 줄에 몇 명<input id="seatColumns" type="number" inputmode="numeric" min="1" max="10" value="6"></label>
+            <button class="button primary" type="submit">배치하기</button>
+          </form>
+          <div id="seatResult" class="seat-result" aria-live="polite"></div>
+        </article>
+      </div>
+    </section>
+
     <footer class="footer">
       <p>데이터 갱신 <span id="updatedAt">확인 중</span> · 매일 새벽 자동 갱신</p>
       <p>우리 반 친구들을 위한 개인 프로젝트이며 학교 공식 서비스가 아닙니다.</p>
       <button class="text-button" id="installButton" type="button" hidden>홈 화면에 앱으로 설치</button>
     </footer>
   </main>
+  <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

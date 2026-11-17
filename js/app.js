@@ -1,7 +1,8 @@
-/* 2학년 3반 — 홈 / 급식 / 시간표 / 일정 / 공지
+/* 2학년 3반 — 홈 / 급식 / 시간표 / 일정 / 공지 (도구 탭은 tools.js)
    한 기능이 실패해도 나머지는 계속 동작하도록 데이터별로 따로 불러온다. */
+import { $, esc, load, save, toast } from "./util.js";
+import { setupTools, suggestClassSize } from "./tools.js";
 
-const $ = id => document.getElementById(id);
 const KST = "Asia/Seoul";
 const MEAL_NAMES = { 1: "아침", 2: "점심", 3: "저녁" };
 // 이 시각(분)이 지나면 그 끼니는 끝난 것으로 보고 다음 끼니를 보여 준다
@@ -18,17 +19,11 @@ const KEYS = {
   ddays: "daegeonDdays",
   memos: "daegeonPersonalMemos",
   allergens: "class23Allergens",
-  picker: "class23Picker",
+  todos: "class23Todos",
+  favorites: "class23Favorites",
+  seenNotices: "class23SeenNotices",
   theme: "class23Theme"
 };
-
-const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
-function load(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
-}
-function save(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* 저장 공간을 못 쓰는 환경 */ }
-}
 
 /* ---------- 날짜 ---------- */
 function kstParts() {
@@ -74,9 +69,10 @@ async function fetchJSON(path) {
 }
 
 /* ---------- 화면 전환 ---------- */
-const PAGES = ["home", "meals", "timetable", "calendar", "notices"];
+const PAGES = ["home", "meals", "timetable", "calendar", "notices", "tools"];
+const currentPage = () => PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
 function showPage() {
-  const page = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
+  const page = currentPage();
   document.querySelectorAll(".page").forEach(section => { section.hidden = section.dataset.page !== page; });
   document.querySelectorAll(".tab").forEach(tab => {
     const active = tab.dataset.page === page;
@@ -84,33 +80,42 @@ function showPage() {
     if (active) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
   });
   window.scrollTo(0, 0);
+  renderNotices();
+  if (page === "notices") markNoticesSeen(); // ‘새 글’ 표시는 이번 한 번만 보여 준다
 }
 
 /* ---------- 급식 ---------- */
 const getMeal = (date, type) => state.meals.get(`${date}|${type}`);
 const myAllergens = () => load(KEYS.allergens, []);
 
-// 지금 시각 기준으로 다음에 먹을 끼니
-function nextMeal() {
+const myFavorites = () => load(KEYS.favorites, []);
+const matchesAny = (name, keywords) => keywords.some(keyword => name.replace(/\s/g, "").includes(keyword));
+
+// 지금 시각 이후에 먹을 끼니들 (날짜·끼니 순)
+function upcomingMeals() {
   const today = todayISO();
   const minutes = nowMinutes();
-  for (let offset = 0; offset < 7; offset++) {
-    const date = shift(today, offset);
-    for (const type of [1, 2, 3]) {
-      if (offset === 0 && minutes >= MEAL_ENDS[type]) continue;
-      const meal = getMeal(date, type);
-      if (meal) return meal;
-    }
-  }
-  return null;
+  return [...state.meals.values()].filter(meal => meal.date > today || (meal.date === today && minutes < MEAL_ENDS[meal.type]));
+}
+function nextMeal() {
+  const meal = upcomingMeals()[0];
+  return meal && daysUntil(meal.date) < 7 ? meal : null;
+}
+// 이름에 검색어가 들어간 메뉴가 나오는 끼니들
+function findMeals(keywords) {
+  const words = keywords.map(word => word.replace(/\s/g, "")).filter(Boolean);
+  if (!words.length) return [];
+  return upcomingMeals()
+    .map(meal => ({ meal, dishes: meal.dishes.filter(dish => matchesAny(dish.name, words)).map(dish => dish.name) }))
+    .filter(result => result.dishes.length);
 }
 function dishListHTML(meal) {
   const mine = myAllergens();
+  const favorites = myFavorites();
   return `<ul class="dish-list">${meal.dishes.map(dish => {
     const hits = dish.allergens.filter(code => mine.includes(code)).map(code => ALLERGENS[code]);
-    return hits.length
-      ? `<li class="hit"><span>${esc(dish.name)}</span><small>${esc(hits.join(" · "))}</small></li>`
-      : `<li><span>${esc(dish.name)}</span></li>`;
+    const star = matchesAny(dish.name, favorites) ? '<b class="star" title="기다리는 메뉴">★</b>' : "";
+    return `<li class="${hits.length ? "hit" : ""}"><span>${star}${esc(dish.name)}</span>${hits.length ? `<small>${esc(hits.join(" · "))}</small>` : ""}</li>`;
   }).join("")}</ul>`;
 }
 function mealMetaHTML(meal) {
@@ -130,7 +135,9 @@ function renderHomeMeal() {
     card.innerHTML = `<div class="card-head"><h2>급식</h2><a class="card-link" href="#meals">전체 보기</a></div><p class="placeholder">앞으로 일주일간 등록된 급식이 없어요.</p>`;
     return;
   }
-  card.innerHTML = `<div class="card-head"><h2>${esc(relativeDay(meal.date))} ${MEAL_NAMES[meal.type]}<span class="tag accent">다음 급식</span></h2><a class="card-link" href="#meals">전체 보기</a></div>${dishListHTML(meal)}${mealMetaHTML(meal)}`;
+  const waiting = findMeals(myFavorites()).filter(result => result.meal !== meal).slice(0, 2)
+    .map(result => `<a class="fav-line" href="#meals" data-meal-date="${result.meal.date}"><b class="star">★</b>${esc(relativeDay(result.meal.date))} ${MEAL_NAMES[result.meal.type]}에 <strong>${esc(result.dishes.join(", "))}</strong></a>`).join("");
+  card.innerHTML = `<div class="card-head"><h2>${esc(relativeDay(meal.date))} ${MEAL_NAMES[meal.type]}<span class="tag accent">다음 급식</span></h2><a class="card-link" href="#meals" data-meal-date="${meal.date}">전체 보기</a></div>${dishListHTML(meal)}${mealMetaHTML(meal)}${waiting}`;
 }
 function renderMeals() {
   const date = state.mealDate;
@@ -174,8 +181,73 @@ function renderAllergens() {
   $("allergySummary").textContent = mine.length ? `${mine.length}개 선택` : "";
   $("allergyChips").innerHTML = ALLERGENS.map((name, code) => code ? `<button type="button" class="button ${mine.includes(code) ? "primary" : ""}" data-code="${code}" aria-pressed="${mine.includes(code)}">${name}</button>` : "").join("");
 }
+function renderFind() {
+  const favorites = myFavorites();
+  const query = $("findInput").value.trim();
+  $("favSummary").textContent = favorites.length ? `${favorites.length}개 저장` : "";
+  $("favChips").innerHTML = favorites.map(word => `<span class="chip"><button type="button" class="chip-text" data-word="${esc(word)}">★ ${esc(word)}</button><button type="button" data-remove="${esc(word)}" aria-label="${esc(word)} 삭제">×</button></span>`).join("");
+  const results = findMeals(query ? [query] : favorites).slice(0, 12);
+  const none = query ? "앞으로 나올 급식 중에는 없어요." : favorites.length ? "저장한 메뉴가 당분간 안 나와요." : "";
+  $("findResults").innerHTML = results.length
+    ? results.map(({ meal, dishes }) => `<li><time datetime="${meal.date}">${esc(shortDate(meal.date))}</time><button type="button" class="link-button" data-date="${meal.date}">${MEAL_NAMES[meal.type]} · ${esc(dishes.join(", "))}</button><span class="when">${daysUntil(meal.date) <= 1 ? relativeDay(meal.date) : ddayLabel(meal.date)}</span></li>`).join("")
+    : none ? `<li class="muted">${none}</li>` : "";
+}
+async function shareMeals() {
+  const date = state.mealDate;
+  const lines = [1, 2, 3].map(type => getMeal(date, type)).filter(Boolean).map(meal => `${MEAL_NAMES[meal.type]}: ${meal.dishes.map(dish => dish.name).join(", ")}`);
+  if (!lines.length) return toast("이 날은 공유할 급식이 없어요.");
+  const text = `[2-3] ${fmt(date, { month: "long", day: "numeric", weekday: "short" })} 급식\n${lines.join("\n")}`;
+  try {
+    if (navigator.share) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(text); toast("급식을 복사했어요. 붙여넣기 하면 돼요."); }
+  } catch (error) {
+    if (error.name !== "AbortError") toast("공유하지 못했어요.");
+  }
+}
 function setupMeals() {
   const go = date => { if (date) { state.mealDate = date; renderMeals(); } };
+  const favoritesChanged = () => { renderFind(); renderMeals(); renderHomeMeal(); };
+  $("mealShare").addEventListener("click", shareMeals);
+  $("homeMeal").addEventListener("click", event => go(event.target.closest("[data-meal-date]")?.dataset.mealDate));
+
+  // 옆으로 밀거나 ← → 키로 날짜 넘기기
+  let touch = null;
+  $("mealCards").addEventListener("touchstart", event => { touch = event.changedTouches[0]; }, { passive: true });
+  $("mealCards").addEventListener("touchend", event => {
+    if (!touch) return;
+    const dx = event.changedTouches[0].clientX - touch.clientX;
+    const dy = event.changedTouches[0].clientY - touch.clientY;
+    touch = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2) go(shift(state.mealDate, dx < 0 ? 1 : -1));
+  }, { passive: true });
+  document.addEventListener("keydown", event => {
+    if (currentPage() !== "meals" || event.target.closest("input, textarea, select") || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === "ArrowLeft") go(shift(state.mealDate, -1));
+    if (event.key === "ArrowRight") go(shift(state.mealDate, 1));
+  });
+
+  // 메뉴 찾기 · 기다리는 메뉴
+  $("findInput").addEventListener("input", renderFind);
+  $("findForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const word = $("findInput").value.trim();
+    const favorites = myFavorites();
+    if (!word) return;
+    if (!favorites.includes(word)) save(KEYS.favorites, [...favorites, word].slice(-12));
+    $("findInput").value = "";
+    favoritesChanged();
+    toast(`‘${word}’ 나오는 날을 홈에서 알려 줄게요.`);
+  });
+  $("favChips").addEventListener("click", event => {
+    const remove = event.target.closest("[data-remove]")?.dataset.remove;
+    const word = event.target.closest("[data-word]")?.dataset.word;
+    if (remove) { save(KEYS.favorites, myFavorites().filter(item => item !== remove)); favoritesChanged(); }
+    if (word) { $("findInput").value = word; renderFind(); }
+  });
+  $("findResults").addEventListener("click", event => {
+    const date = event.target.closest("[data-date]")?.dataset.date;
+    if (date) { go(date); $("mealDateTitle").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  });
   $("mealPrevWeek").addEventListener("click", () => go(shift(state.mealDate, -7)));
   $("mealNextWeek").addEventListener("click", () => go(shift(state.mealDate, 7)));
   $("mealToday").addEventListener("click", () => go(todayISO()));
@@ -199,7 +271,9 @@ async function loadMeals() {
     const json = await fetchJSON("./data/meals.json");
     state.meals = new Map(json.meals.map(meal => [`${meal.date}|${meal.type}`, meal]));
     const updated = new Date(json.updatedAt);
-    $("updatedAt").textContent = Number.isNaN(updated.getTime()) ? "알 수 없음" : updated.toLocaleString("ko-KR", { timeZone: KST, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const stale = Date.now() - updated.getTime() > 3 * 864e5; // 매일 갱신되므로 사흘 넘게 그대로면 뭔가 멈춘 것
+    $("updatedAt").textContent = Number.isNaN(updated.getTime()) ? "알 수 없음" : updated.toLocaleString("ko-KR", { timeZone: KST, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) + (stale ? " (자동 갱신이 멈춘 것 같아요. 급식이 최신이 아닐 수 있어요)" : "");
+    $("updatedAt").classList.toggle("stale", stale);
   } catch (error) {
     console.error("[2-3] 급식 로딩 실패:", error);
     const message = '<p class="placeholder">급식을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.</p>';
@@ -209,6 +283,7 @@ async function loadMeals() {
   }
   renderHomeMeal();
   renderMeals();
+  renderFind();
 }
 
 /* ---------- 시간표 ---------- */
@@ -323,6 +398,7 @@ function setupTimetable() {
 async function loadTimetable() {
   try {
     state.timetable = await fetchJSON("./data/timetable.json");
+    suggestClassSize(Object.keys(state.timetable.students || {}).length);
   } catch (error) {
     console.error("[2-3] 시간표 로딩 실패:", error);
     $("homeTimetable").innerHTML = '<p class="placeholder">시간표를 불러오지 못했습니다.</p>';
@@ -359,7 +435,7 @@ async function loadEvents() {
   if (calendar.status === "rejected") console.warn("[2-3] 학교 캘린더 로딩 실패:", calendar.reason);
   state.events = events.sort((a, b) => a.date.localeCompare(b.date));
   state.holidays = new Set(events.filter(item => item.holiday).map(item => item.date));
-  renderDdays(); renderUpcoming(); renderCalendar(); renderHomeTimetable();
+  renderHero(); renderDdays(); renderUpcoming(); renderCalendar(); renderHomeTimetable();
 }
 async function loadSupervisors() {
   try {
@@ -385,6 +461,13 @@ function renderHero() {
   const name = supervisorOf(today);
   $("homeSupervisor").hidden = !name;
   $("homeSupervisor").innerHTML = name ? `오늘 ${MY_GRADE}학년 자습 감독 <strong>${esc(name)}</strong> 선생님` : "";
+
+  // 다음 방학까지 실제로 학교 가는 날 (주말·쉬는 날 제외)
+  const vacation = eventStarts().find(item => item.date > today && /방학$/.test(item.title));
+  let schoolDays = 0;
+  if (vacation) for (let day = today; day < vacation.date; day = shift(day, 1)) if (isSchoolDay(day)) schoolDays++;
+  $("homeVacation").hidden = !schoolDays;
+  $("homeVacation").innerHTML = schoolDays ? `${esc(vacation.title)}까지 학교 가는 날 <strong>${schoolDays}일</strong>` : "";
 }
 const getMyDdays = () => { const list = load(KEYS.ddays, []); return Array.isArray(list) ? list : []; };
 function autoDdays() {
@@ -438,6 +521,60 @@ function renderUpcoming() {
     : `${head}<p class="placeholder">3주 안에 잡힌 일정이 없어요.</p>`;
 }
 
+/* ---------- 할 일 (수행평가·숙제·준비물) ---------- */
+const getTodos = () => { const list = load(KEYS.todos, []); return Array.isArray(list) ? list : []; };
+// 안 끝낸 것 먼저, 그 안에서는 마감이 가까운 순 (마감 없는 것은 뒤로)
+const sortedTodos = () => getTodos().sort((a, b) => (a.done - b.done) || (a.date || "9").localeCompare(b.date || "9"));
+function todoItemHTML(item, showDate) {
+  const left = item.date ? daysUntil(item.date) : null;
+  const when = item.done || left === null ? ""
+    : left < 0 ? `<span class="when late">${-left}일 지남</span>`
+    : `<span class="when">${left <= 1 ? relativeDay(item.date) : ddayLabel(item.date)}</span>`;
+  return `<li class="todo ${item.done ? "done" : ""}"><label><input type="checkbox" data-todo="${esc(item.id)}" ${item.done ? "checked" : ""}><span>${esc(item.title)}${showDate && item.date ? `<small>${esc(shortDate(item.date))}</small>` : ""}</span></label>${when}<button type="button" class="todo-remove" data-todo-remove="${esc(item.id)}" aria-label="${esc(item.title)} 삭제">×</button></li>`;
+}
+function renderTodos() {
+  const items = sortedTodos();
+  const doneCount = items.filter(item => item.done).length;
+  $("todoList").innerHTML = items.length
+    ? items.map(item => todoItemHTML(item, true)).join("")
+    : '<li class="muted">수행평가나 준비물을 적어 두면 마감까지 며칠 남았는지 알려 줘요.</li>';
+  $("todoClear").hidden = !doneCount;
+  $("todoClear").textContent = `끝낸 ${doneCount}개 지우기`;
+  renderCalendar();
+}
+function addTodo(title, date) {
+  if (!title) return;
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  save(KEYS.todos, [...getTodos(), { id, title, date: date || "", done: false }]);
+  renderTodos();
+}
+function setupTodos() {
+  $("todoForm").addEventListener("submit", event => {
+    event.preventDefault();
+    addTodo($("todoTitle").value.trim(), $("todoDate").value);
+    event.target.reset();
+  });
+  $("dayTodoForm").addEventListener("submit", event => {
+    event.preventDefault();
+    addTodo($("dayTodoTitle").value.trim(), state.calendarDate);
+    event.target.reset();
+  });
+  $("todoClear").addEventListener("click", () => { save(KEYS.todos, getTodos().filter(item => !item.done)); renderTodos(); });
+  // 홈과 달력 두 곳에 같은 목록이 있어 문서 전체에서 받는다
+  document.addEventListener("change", event => {
+    const id = event.target.dataset?.todo;
+    if (!id) return;
+    save(KEYS.todos, getTodos().map(item => item.id === id ? { ...item, done: event.target.checked } : item));
+    renderTodos();
+  });
+  document.addEventListener("click", event => {
+    const id = event.target.closest("[data-todo-remove]")?.dataset.todoRemove;
+    if (!id) return;
+    save(KEYS.todos, getTodos().filter(item => item.id !== id));
+    renderTodos();
+  });
+}
+
 /* ---------- 달력 ---------- */
 const getMemos = () => load(KEYS.memos, {});
 const noticesOn = date => (state.notices || []).filter(item => String(item.date || "").slice(0, 10) === date);
@@ -449,6 +586,7 @@ function renderCalendar() {
   const lastDay = new Date(year, month, 0).getDate();
   const weeks = Math.ceil((parseISO(first).getDay() + lastDay) / 7);
   const memos = getMemos();
+  const todos = getTodos().filter(item => item.date && !item.done);
   const today = todayISO();
   const cells = [];
   for (let i = 0; i < weeks * 7; i++) {
@@ -457,6 +595,7 @@ function renderCalendar() {
     const labels = [
       ...events.map(item => ({ kind: item.holiday ? "holiday" : "school", text: item.title })),
       ...noticesOn(date).map(item => ({ kind: "notice", text: item.title || "공지" })),
+      ...todos.filter(item => item.date === date).map(item => ({ kind: "memo", text: item.title })),
       ...(memos[date] ? [{ kind: "memo", text: "메모" }] : [])
     ];
     const off = parseISO(date).getDay() === 0 || state.holidays.has(date);
@@ -471,11 +610,13 @@ function renderDay() {
   const date = state.calendarDate;
   $("dayTitle").textContent = fmt(date, { month: "long", day: "numeric", weekday: "long" });
   const items = [
-    ...state.events.filter(item => item.date === date).map(item => `<div class="day-item"><span class="kind cal-label ${item.holiday ? "holiday" : "school"}" style="display:inline-block">${item.holiday ? "쉬는 날" : "학교 일정"}</span><strong>${esc(item.title)}</strong></div>`),
-    ...noticesOn(date).map(item => `<div class="day-item"><span class="kind cal-label notice" style="display:inline-block">공지</span><strong>${esc(item.title || "제목 없음")}</strong><p>${esc(item.content || "")}</p></div>`)
+    ...state.events.filter(item => item.date === date).map(item => `<div class="day-item"><span class="kind cal-label ${item.holiday ? "holiday" : "school"}">${item.holiday ? "쉬는 날" : "학교 일정"}</span><strong>${esc(item.title)}</strong></div>`),
+    ...noticesOn(date).map(item => `<div class="day-item"><span class="kind cal-label notice">공지</span><strong>${esc(item.title || "제목 없음")}</strong><p>${esc(item.content || "")}</p></div>`)
   ];
   const supervisor = supervisorOf(date);
-  if (supervisor) items.push(`<div class="day-item"><span class="kind cal-label memo" style="display:inline-block">자습 감독</span><strong>${esc(supervisor)}</strong></div>`);
+  if (supervisor) items.push(`<div class="day-item"><span class="kind cal-label memo">자습 감독</span><strong>${esc(supervisor)}</strong></div>`);
+  const todos = sortedTodos().filter(item => item.date === date);
+  if (todos.length) items.push(`<ul class="todo-list">${todos.map(item => todoItemHTML(item, false)).join("")}</ul>`);
   $("dayDetails").innerHTML = items.join("") || '<p class="muted">이 날은 등록된 일정이 없어요.</p>';
   if (document.activeElement !== $("memoText")) $("memoText").value = getMemos()[date] || "";
   $("memoStatus").textContent = "";
@@ -525,15 +666,27 @@ const firebase = { auth: null, db: null, authApi: null, dbApi: null, user: null 
 const isAdmin = () => firebase.user?.uid === ADMIN_UID;
 const authStatus = message => { $("authStatus").textContent = message || ""; };
 
+// 아직 안 본 공지 id. 처음 온 사람에게는 예전 공지를 전부 새 글로 띄우지 않는다
+function unseenNoticeIds() {
+  const seen = load(KEYS.seenNotices, null);
+  return new Set(seen ? (state.notices || []).filter(item => !seen.includes(item.id)).map(item => item.id) : []);
+}
+function markNoticesSeen() {
+  if (state.notices) save(KEYS.seenNotices, state.notices.map(item => item.id));
+  document.querySelector('.tab[data-page="notices"]').classList.remove("has-new");
+}
 function renderNotices() {
   const list = state.notices;
-  const head = '<div class="card-head"><h2>공지</h2><a class="card-link" href="#notices">전체 보기</a></div>';
   if (list === null) return;
+  const unseen = unseenNoticeIds();
+  const fresh = item => unseen.has(item.id) ? '<span class="tag accent">새 글</span>' : "";
+  document.querySelector('.tab[data-page="notices"]').classList.toggle("has-new", unseen.size > 0);
+  const head = '<div class="card-head"><h2>공지</h2><a class="card-link" href="#notices">전체 보기</a></div>';
   $("homeNotices").innerHTML = list.length
-    ? `${head}${list.slice(0, 3).map(item => `<a class="home-notice" href="#notices"><strong>${esc(item.title || "제목 없음")}</strong><span>${esc(item.date || "")}</span></a>`).join("")}`
+    ? `${head}${list.slice(0, 3).map(item => `<a class="home-notice" href="#notices"><strong>${esc(item.title || "제목 없음")}${fresh(item)}</strong><span>${esc(item.date || "")}</span></a>`).join("")}`
     : `${head}<p class="placeholder">등록된 공지가 없어요.</p>`;
   $("noticeList").innerHTML = list.length
-    ? list.map(item => `<article class="card notice-card"><div class="card-head"><h2>${esc(item.title || "제목 없음")}</h2><time>${esc(item.date || "")}</time></div><p>${esc(item.content || "")}</p>${isAdmin() ? `<div class="notice-actions"><button type="button" class="text-button" data-edit="${esc(item.id)}">수정</button><button type="button" class="text-button" data-delete="${esc(item.id)}">삭제</button></div>` : ""}</article>`).join("")
+    ? list.map(item => `<article class="card notice-card"><div class="card-head"><h2>${esc(item.title || "제목 없음")}${fresh(item)}</h2><time>${esc(item.date || "")}</time></div><p>${esc(item.content || "")}</p>${isAdmin() ? `<div class="notice-actions"><button type="button" class="text-button" data-edit="${esc(item.id)}">수정</button><button type="button" class="text-button" data-delete="${esc(item.id)}">삭제</button></div>` : ""}</article>`).join("")
     : '<p class="placeholder">등록된 공지가 없습니다.</p>';
 }
 function noticesFailed(message) {
@@ -546,7 +699,9 @@ async function loadNotices() {
     const { collection, getDocs, query, orderBy } = firebase.dbApi;
     const result = await getDocs(query(collection(firebase.db, "publicMemos"), orderBy("date", "desc")));
     state.notices = result.docs.map(item => ({ id: item.id, ...item.data() }));
+    if (load(KEYS.seenNotices, null) === null) save(KEYS.seenNotices, state.notices.map(item => item.id));
     renderNotices();
+    if (currentPage() === "notices") markNoticesSeen();
     renderCalendar();
   } catch (error) {
     console.error("[2-3] 공지 로딩 실패:", error);
@@ -645,46 +800,6 @@ async function initFirebase() {
   }
 }
 
-/* ---------- 번호 뽑기 ---------- */
-// 치우침 없는 0 ≤ n < max 난수
-function randomBelow(max) {
-  const limit = Math.floor(2 ** 32 / max) * max;
-  const box = new Uint32Array(1);
-  do crypto.getRandomValues(box); while (box[0] >= limit);
-  return box[0] % max;
-}
-function shuffled(list) {
-  const result = [...list];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = randomBelow(i + 1);
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
-function setupPicker() {
-  const saved = load(KEYS.picker, {});
-  if (saved.size) $("pickerSize").value = saved.size;
-  if (saved.exclude) $("pickerExclude").value = saved.exclude;
-  const candidates = () => {
-    const size = Math.min(60, Math.max(1, Number($("pickerSize").value) || 1));
-    const excluded = new Set(($("pickerExclude").value.match(/\d+/g) || []).map(Number));
-    save(KEYS.picker, { size, exclude: $("pickerExclude").value });
-    return Array.from({ length: size }, (_, i) => i + 1).filter(number => !excluded.has(number));
-  };
-  const show = (numbers, small) => {
-    $("pickerResult").innerHTML = numbers.length
-      ? numbers.map((number, index) => `<span class="ball ${small ? "small" : ""}" style="animation-delay:${Math.min(index * 40, 800)}ms">${number}</span>`).join("")
-      : '<p class="muted">뽑을 번호가 없어요.</p>';
-  };
-  $("pickerForm").addEventListener("submit", event => {
-    event.preventDefault();
-    const pool = candidates();
-    const count = Math.min(pool.length, Math.max(1, Number($("pickerCount").value) || 1));
-    show(shuffled(pool).slice(0, count), false);
-  });
-  $("pickerShuffle").addEventListener("click", () => show(shuffled(candidates()), true));
-}
-
 /* ---------- 테마 · 앱 설치 ---------- */
 function setupTheme() {
   $("themeToggle").addEventListener("click", () => {
@@ -721,13 +836,14 @@ function start() {
   setupDdays();
   setupCalendar();
   setupNotices();
-  setupPicker();
+  setupTodos();
+  setupTools();
   setupInstall();
 
   renderHero();
   renderDdays();
   renderMeals();
-  renderCalendar();
+  renderTodos(); // 달력도 함께 그린다
 
   loadMeals();
   loadTimetable();
