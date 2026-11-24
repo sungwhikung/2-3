@@ -321,7 +321,11 @@ th.pick { cursor: pointer; }
 .notice-actions { display: flex; gap: 4px; margin: 10px 0 -6px -10px; }
 .admin-panel { margin-top: 28px; }
 .logged-in { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-#noticeForm { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+#noticeForm, #mealForm { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+#mealForm .check { margin-top: 10px; }
+#mealForm h3.field-label { margin-top: 24px; }
+.preview { font-weight: 500; margin-left: 6px; }
+.admin-bar { margin-top: 8px; text-align: right; }
 
 .footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--line); font-size: .8rem; color: var(--muted); display: grid; gap: 4px; justify-items: start; }
 .footer .text-button { margin-left: -10px; }

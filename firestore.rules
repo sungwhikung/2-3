@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// 공지(publicMemos)는 누구나 읽고, 관리자 한 명만 쓴다.
+// 공지(publicMemos)와 직접 입력한 급식(manualMeals)은 누구나 읽고, 관리자 한 명만 쓴다.
 // Firebase 콘솔 → Firestore → 규칙에 붙여 넣는다.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -22,6 +22,24 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 100
         && request.resource.data.content is string
         && request.resource.data.content.size() <= 3000;
+
+      allow delete: if isAdmin();
+    }
+
+    // 관리자가 직접 입력한 급식. 문서 이름은 "2026-11-24-2" (날짜-끼니, 1 아침 2 점심 3 저녁)
+    match /manualMeals/{mealId} {
+      allow read: if true;
+
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasAll(["date", "type", "menu", "override", "updatedAt"])
+        && request.resource.data.date is string
+        && request.resource.data.date.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && request.resource.data.type in [1, 2, 3]
+        && mealId == request.resource.data.date + "-" + string(request.resource.data.type)
+        && request.resource.data.menu is string
+        && request.resource.data.menu.size() > 0
+        && request.resource.data.menu.size() <= 1000
+        && request.resource.data.override is bool;
 
       allow delete: if isAdmin();
     }

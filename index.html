@@ -103,6 +103,7 @@
         <button class="icon-button" id="mealNextWeek" type="button" aria-label="다음 주">›</button>
       </div>
       <div id="mealCards" class="meal-grid"><p class="placeholder">불러오는 중…</p></div>
+      <p id="mealAdminBar" class="admin-bar" hidden><button class="text-button" id="mealManualJump" type="button">이 날 급식 직접 입력 · 고치기</button></p>
 
       <details class="panel fold" id="findPanel">
         <summary>메뉴 찾기 · 기다리는 메뉴<span id="favSummary" class="tag"></span></summary>
@@ -206,6 +207,26 @@
           <textarea id="noticeContent" rows="5" maxlength="3000" required></textarea>
           <button class="button primary" type="submit">저장</button>
           <p id="noticeFormStatus" class="status-text" aria-live="polite"></p>
+        </form>
+
+        <form id="mealForm" class="stack" hidden>
+          <div class="card-head"><h2>급식 직접 입력</h2><span class="tag">나이스가 늦을 때</span></div>
+          <p class="muted">학교 사이트의 메뉴를 한 줄에 하나씩 붙여 넣으세요. 끝에 붙은 알레르기 번호(예: 5.6)는 자동으로 알아봅니다. 나중에 나이스에 같은 끼니가 올라오면 그쪽이 대신 보입니다.</p>
+          <label class="field-label" for="mealFormDate">날짜</label>
+          <input id="mealFormDate" type="date" required>
+          <p id="mealFormNeis" class="status-text"></p>
+          <label class="field-label" for="mealForm1">아침 <span class="preview" data-preview="1"></span></label>
+          <textarea id="mealForm1" rows="4" maxlength="1000" placeholder="친환경잡곡밥 (5)&#10;아욱된장국 (5.6)&#10;…"></textarea>
+          <label class="field-label" for="mealForm2">점심 <span class="preview" data-preview="2"></span></label>
+          <textarea id="mealForm2" rows="5" maxlength="1000"></textarea>
+          <label class="field-label" for="mealForm3">저녁 <span class="preview" data-preview="3"></span></label>
+          <textarea id="mealForm3" rows="5" maxlength="1000"></textarea>
+          <label class="check"><input type="checkbox" id="mealFormOverride">나이스 급식이 있어도 직접 입력한 메뉴로 보여 주기</label>
+          <p class="muted">비워 둔 끼니는 저장하지 않고, 전에 입력했던 끼니를 비우면 지웁니다.</p>
+          <button class="button primary" type="submit">저장</button>
+          <p id="mealFormStatus" class="status-text" aria-live="polite"></p>
+          <h3 class="field-label">직접 입력한 급식</h3>
+          <ul id="manualMealList" class="upcoming"></ul>
         </form>
       </details>
     </section>

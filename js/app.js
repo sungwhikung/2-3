@@ -52,7 +52,10 @@ function ddayLabel(value) { const left = daysUntil(value); return left === 0 ? "
 
 /* ---------- 상태 ---------- */
 const state = {
-  meals: new Map(),      // "2026-11-17|2" → 급식
+  meals: new Map(),      // 화면에 보이는 급식 (아래 둘을 합친 것)
+  neisMeals: new Map(),  // data/meals.json (나이스)
+  manualMeals: new Map(), // Firestore manualMeals (관리자가 직접 입력)
+  mealsReady: false,      // "2026-11-17|2" → 급식
   events: [],            // { date, title, holiday }
   holidays: new Set(),   // 수업 없는 날
   supervisors: {},
@@ -85,7 +88,7 @@ function showPage() {
   if (page === "notices") markNoticesSeen(); // ‘새 글’ 표시는 이번 한 번만 보여 준다
 }
 
-/* ---------- 급식 ---------- */
+/* ---------- 급식 (나이스 + 관리자가 직접 입력한 것) ---------- */
 const getMeal = (date, type) => state.meals.get(`${date}|${type}`);
 const myAllergens = () => load(KEYS.allergens, []);
 
@@ -128,9 +131,10 @@ function mealMetaHTML(meal) {
   if (n.fat) parts.push(`지 ${Math.round(n.fat)}g`);
   return parts.length ? `<p class="meal-meta">${parts.join(" · ")}</p>` : "";
 }
+const manualTag = meal => meal.manual ? '<span class="tag" title="나이스에 올라오기 전에 학교 사이트를 보고 옮겨 적은 메뉴예요">직접 입력</span>' : "";
 function renderHomeMeal() {
   const card = $("homeMeal");
-  if (!state.meals.size) return;
+  if (!state.mealsReady && !state.meals.size) return;
   const meal = nextMeal();
   if (!meal) {
     card.innerHTML = `<div class="card-head"><h2>급식</h2><a class="card-link" href="#meals">전체 보기</a></div><p class="placeholder">앞으로 일주일간 등록된 급식이 없어요.</p>`;
@@ -138,7 +142,7 @@ function renderHomeMeal() {
   }
   const waiting = findMeals(myFavorites()).filter(result => result.meal !== meal).slice(0, 2)
     .map(result => `<a class="fav-line" href="#meals" data-meal-date="${result.meal.date}"><b class="star">★</b>${esc(relativeDay(result.meal.date))} ${MEAL_NAMES[result.meal.type]}에 <strong>${esc(result.dishes.join(", "))}</strong></a>`).join("");
-  card.innerHTML = `<div class="card-head"><h2>${esc(relativeDay(meal.date))} ${MEAL_NAMES[meal.type]}<span class="tag accent">다음 급식</span></h2><a class="card-link" href="#meals" data-meal-date="${meal.date}">전체 보기</a></div>${dishListHTML(meal)}${mealMetaHTML(meal)}${waiting}`;
+  card.innerHTML = `<div class="card-head"><h2>${esc(relativeDay(meal.date))} ${MEAL_NAMES[meal.type]}<span class="tag accent">다음 급식</span>${manualTag(meal)}</h2><a class="card-link" href="#meals" data-meal-date="${meal.date}">전체 보기</a></div>${dishListHTML(meal)}${mealMetaHTML(meal)}${waiting}`;
 }
 function renderMeals() {
   const date = state.mealDate;
@@ -154,15 +158,16 @@ function renderMeals() {
     return `<button type="button" class="${classes}" data-date="${day}" aria-label="${esc(fmt(day, { month: "long", day: "numeric", weekday: "long" }))}" ${day === date ? 'aria-current="date"' : ""}>${esc(fmt(day, { weekday: "short" }))}<b>${parseISO(day).getDate()}</b></button>`;
   }).join("");
 
+  $("mealAdminBar").hidden = !isAdmin();
   const cards = $("mealCards");
-  if (!state.meals.size) return;
+  if (!state.mealsReady && !state.meals.size) return;
   const upcoming = nextMeal();
   cards.innerHTML = [1, 2, 3].some(type => getMeal(date, type))
     ? [1, 2, 3].map(type => {
         const meal = getMeal(date, type);
         if (!meal) return `<article class="card meal-card none"><div class="card-head"><h2>${MEAL_NAMES[type]}</h2></div><p class="muted">없음</p></article>`;
         const isNext = upcoming === meal && date === today;
-        return `<article class="card meal-card ${isNext ? "now" : ""}"><div class="card-head"><h2>${MEAL_NAMES[type]}${isNext ? '<span class="tag accent">다음 급식</span>' : ""}</h2></div>${dishListHTML(meal)}${mealMetaHTML(meal)}</article>`;
+        return `<article class="card meal-card ${isNext ? "now" : ""}"><div class="card-head"><h2>${MEAL_NAMES[type]}${isNext ? '<span class="tag accent">다음 급식</span>' : ""}</h2>${manualTag(meal)}</div>${dishListHTML(meal)}${mealMetaHTML(meal)}</article>`;
       }).join("")
     : '<p class="placeholder">이 날은 등록된 급식이 없습니다.</p>';
 
@@ -270,7 +275,8 @@ function setupMeals() {
 async function loadMeals() {
   try {
     const json = await fetchJSON("./data/meals.json");
-    state.meals = new Map(json.meals.map(meal => [`${meal.date}|${meal.type}`, meal]));
+    state.neisMeals = new Map(json.meals.map(meal => [`${meal.date}|${meal.type}`, meal]));
+    state.mealsReady = true;
     const updated = new Date(json.updatedAt);
     const stale = Date.now() - updated.getTime() > 3 * 864e5; // 매일 갱신되므로 사흘 넘게 그대로면 뭔가 멈춘 것
     $("updatedAt").textContent = Number.isNaN(updated.getTime()) ? "알 수 없음" : updated.toLocaleString("ko-KR", { timeZone: KST, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) + (stale ? " (자동 갱신이 멈춘 것 같아요. 급식이 최신이 아닐 수 있어요)" : "");
@@ -282,9 +288,20 @@ async function loadMeals() {
     $("mealCards").innerHTML = message;
     $("updatedAt").textContent = "연결 오류";
   }
+  mealsChanged();
+}
+// 나이스가 있으면 나이스, 없으면 직접 입력한 것 ("우선" 표시한 직접 입력은 나이스보다 먼저)
+function mergeMeals() {
+  const merged = new Map(state.neisMeals);
+  for (const [key, meal] of state.manualMeals) if (meal.override || !merged.has(key)) merged.set(key, meal);
+  state.meals = new Map([...merged].sort(([a], [b]) => a.localeCompare(b)));
+}
+function mealsChanged() {
+  mergeMeals();
   renderHomeMeal();
   renderMeals();
   renderFind();
+  renderManualList();
 }
 
 /* ---------- 시간표 ---------- */
@@ -714,6 +731,8 @@ function updateAuthUI() {
   $("loginForm").hidden = Boolean(user);
   $("loggedIn").hidden = !user;
   $("noticeForm").hidden = !isAdmin();
+  $("mealForm").hidden = !isAdmin();
+  if (isAdmin() && !$("mealFormDate").value) fillMealForm(state.mealDate);
   $("loggedInEmail").textContent = user?.email || "—";
   $("adminRole").textContent = isAdmin() ? "관리자 권한 확인됨" : "이 계정은 공지를 쓸 수 없습니다.";
   if (isAdmin() && !$("noticeDate").value) $("noticeDate").value = todayISO();
@@ -793,12 +812,121 @@ async function initFirebase() {
       firebase.user = user;
       updateAuthUI();
       renderNotices();
+      renderMeals();
     });
-    await loadNotices();
+    await Promise.all([loadNotices(), loadManualMeals()]);
   } catch (error) {
     console.error("[2-3] Firebase 연결 실패:", error);
     noticesFailed("공지 서버에 연결하지 못했습니다.");
   }
+}
+
+/* ---------- 급식 직접 입력 (나이스가 늦을 때 관리자가 학교 사이트 메뉴를 옮겨 적는다) ---------- */
+// 메뉴 끝의 알레르기 번호: "아욱된장국 (5.6)" 또는 "돈까스1.2.5."
+const ALLERGEN_PAREN = /\s*\(\s*(\d{1,2}(?:\s*\.\s*\d{1,2})*)\s*\.?\s*\)\s*$/;
+const ALLERGEN_TAIL = /(?<=[가-힣A-Za-z\])])\s*(\d{1,2}(?:\.\d{1,2})*)\.?$/;
+function parseMenu(text) {
+  return String(text || "")
+    .split(/\r?\n|,|<br\s*\/?>/i)
+    .map(line => line.replace(/^[\s·•\-*]+/, "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map(line => {
+      const match = line.match(ALLERGEN_PAREN) || line.match(ALLERGEN_TAIL);
+      const codes = match ? match[1].split(".").map(code => Number(code.trim())) : [];
+      const name = match ? line.slice(0, match.index).trim() : "";
+      return name && codes.every(code => code >= 1 && code <= 19) ? { name, allergens: codes } : { name: line, allergens: [] };
+    });
+}
+async function loadManualMeals() {
+  if (!firebase.db) return;
+  try {
+    const { collection, getDocs, query, where } = firebase.dbApi;
+    const result = await getDocs(query(collection(firebase.db, "manualMeals"), where("date", ">=", shift(todayISO(), -45))));
+    state.manualMeals = new Map(result.docs.map(item => {
+      const data = item.data();
+      const meal = { id: item.id, date: data.date, type: Number(data.type), menu: data.menu || "", override: Boolean(data.override), dishes: parseMenu(data.menu), nutrition: {}, manual: true };
+      return [`${meal.date}|${meal.type}`, meal];
+    }).filter(([, meal]) => /^\d{4}-\d{2}-\d{2}$/.test(meal.date) && MEAL_NAMES[meal.type] && meal.dishes.length));
+  } catch (error) {
+    // Firestore 규칙에 manualMeals가 없으면 여기로 온다. 나이스 급식은 그대로 보인다
+    console.warn("[2-3] 직접 입력한 급식을 불러오지 못했습니다. Firestore 규칙에 manualMeals 부분을 넣었는지 확인해 주세요.", error);
+  }
+  mealsChanged();
+}
+function updateMealPreviews() {
+  document.querySelectorAll("[data-preview]").forEach(element => {
+    const dishes = parseMenu($(`mealForm${element.dataset.preview}`).value);
+    const withCodes = dishes.filter(dish => dish.allergens.length).length;
+    element.textContent = dishes.length ? `메뉴 ${dishes.length}개${withCodes ? ` · 알레르기 번호 ${withCodes}개 인식` : ""}` : "";
+  });
+}
+function fillMealForm(date) {
+  if (!date) return;
+  $("mealFormDate").value = date;
+  let override = false;
+  for (const type of [1, 2, 3]) {
+    const manual = state.manualMeals.get(`${date}|${type}`);
+    $(`mealForm${type}`).value = manual?.menu || "";
+    if (manual?.override) override = true;
+  }
+  $("mealFormOverride").checked = override;
+  const neis = [1, 2, 3].filter(type => state.neisMeals.has(`${date}|${type}`)).map(type => MEAL_NAMES[type]);
+  $("mealFormNeis").textContent = `${shortDate(date)}: ` + (neis.length ? `나이스에 ${neis.join("·")} 급식이 이미 있어요. 같은 끼니는 나이스 쪽이 보입니다.` : "나이스에 아직 급식이 없어요.");
+  $("mealFormStatus").textContent = "";
+  updateMealPreviews();
+}
+function renderManualList() {
+  const list = $("manualMealList");
+  if (!list) return;
+  const since = shift(todayISO(), -7);
+  const items = [...state.manualMeals.values()].filter(meal => meal.date >= since).sort((a, b) => (a.date + a.type).localeCompare(b.date + b.type));
+  list.innerHTML = items.length
+    ? items.map(meal => {
+        const replaced = !meal.override && state.neisMeals.has(`${meal.date}|${meal.type}`);
+        const rest = meal.dishes.length > 1 ? ` 외 ${meal.dishes.length - 1}개` : "";
+        return `<li><time datetime="${meal.date}">${esc(shortDate(meal.date))}</time><button type="button" class="link-button" data-manual-date="${meal.date}">${MEAL_NAMES[meal.type]} · ${esc(meal.dishes[0].name)}${rest}</button><span class="when">${replaced ? "나이스로 대체됨" : meal.override ? "나이스보다 우선" : ""}</span></li>`;
+      }).join("")
+    : '<li class="muted">최근에 직접 입력한 급식이 없어요.</li>';
+}
+function setupManualMeals() {
+  $("mealFormDate").addEventListener("change", event => fillMealForm(event.target.value));
+  $("mealForm").addEventListener("input", event => { if (event.target.tagName === "TEXTAREA") updateMealPreviews(); });
+  $("manualMealList").addEventListener("click", event => fillMealForm(event.target.closest("[data-manual-date]")?.dataset.manualDate));
+  $("mealManualJump").addEventListener("click", () => {
+    fillMealForm(state.mealDate);
+    document.querySelector(".admin-panel").open = true;
+    location.hash = "#notices";
+    setTimeout(() => $("mealForm").scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  });
+  $("mealForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!isAdmin()) return;
+    const date = $("mealFormDate").value;
+    if (!date) return;
+    const override = $("mealFormOverride").checked;
+    const { doc, setDoc, deleteDoc, serverTimestamp } = firebase.dbApi;
+    const saved = [];
+    const removed = [];
+    try {
+      for (const type of [1, 2, 3]) {
+        const menu = $(`mealForm${type}`).value.trim();
+        const ref = doc(firebase.db, "manualMeals", `${date}-${type}`);
+        if (parseMenu(menu).length) {
+          await setDoc(ref, { date, type, menu, override, updatedAt: serverTimestamp(), updatedBy: firebase.user.uid });
+          saved.push(MEAL_NAMES[type]);
+        } else if (state.manualMeals.has(`${date}|${type}`)) {
+          await deleteDoc(ref);
+          removed.push(MEAL_NAMES[type]);
+        }
+      }
+      await loadManualMeals();
+      fillMealForm(date);
+      $("mealFormStatus").textContent = [saved.length && `${saved.join("·")} 저장`, removed.length && `${removed.join("·")} 삭제`].filter(Boolean).join(", ") + (saved.length || removed.length ? "했어요. 모든 친구 화면에 바로 반영됩니다." : "입력한 메뉴가 없어요.");
+    } catch (error) {
+      console.error(error);
+      $("mealFormStatus").textContent = "저장에 실패했습니다. Firebase 콘솔에서 Firestore 규칙에 manualMeals 부분을 넣었는지 확인해 주세요.";
+    }
+  });
 }
 
 /* ---------- 테마 · 앱 설치 ---------- */
@@ -837,6 +965,7 @@ function start() {
   setupDdays();
   setupCalendar();
   setupNotices();
+  setupManualMeals();
   setupTodos();
   setupTools();
   setupSeats();
